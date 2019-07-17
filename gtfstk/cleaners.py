@@ -190,7 +190,7 @@ def drop_undefined(feed: "Feed") -> "Feed":
         feed.trips = f
 
     # Drop stop_times with undefined trip_id
-    ids = feed.trip_id["trip_id"].unique()
+    ids = feed.trips["trip_id"].unique()
     f = feed.stop_times
     feed.stop_times = f[f["trip_id"].isin(ids)]
 
