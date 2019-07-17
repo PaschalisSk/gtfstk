@@ -183,7 +183,9 @@ def drop_undefined(feed: "Feed") -> "Feed":
     # Drop trips['shape_id'] with undefined shape_id
     if "shape_id" in feed.trips.columns:
         f = feed.trips.copy()
-        ids = feed.shapes["shape_id"].unique()
+        ids = []
+        if feed.shapes is not None:
+            ids = feed.shapes["shape_id"].unique()
         f["shape_id"] = f.shape_id.map(
             lambda x: x if x in ids else np.nan
         )
