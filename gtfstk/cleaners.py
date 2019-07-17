@@ -85,32 +85,17 @@ def drop_zombies(feed: "Feed") -> "Feed":
     """
     In the given Feed, do the following in order:
 
-    1. Drop stops of location type 0 or NaN with no stop times.
-    2. Remove undefined parent stations from the ``parent_station`` column.
-    3. Drop trips with no stop times.
-    4. Drop shapes with no trips.
-    5. Drop routes with no trips.
-    6. Drop services with no trips.
+    1. Drop trips with no stop times.
+    2. Drop shapes with no trips.
+    3. Drop services with no trips.
+    4. Drop routes with no trips.
+    5. Drop stops of location type 0 or NaN with no stop times.
+    TODO: 6. Drop stops of location_type parent with no children
+    TODO: 7. If feed has more than one agency, drop agencies without routes
 
     Return the resulting Feed.
     """
     feed = feed.copy()
-
-    f = feed.stops.copy()
-    ids = feed.stop_times.stop_id.unique()
-    cond = f.stop_id.isin(ids)
-    if "location_type" in f.columns:
-        cond |= ~f.location_type.isin([0, np.nan])
-    feed.stops = f[cond].copy()
-
-    # Remove undefined parent stations from the ``parent_station`` column
-    if "parent_station" in feed.stops.columns:
-        f = feed.stops.copy()
-        ids = f.stop_id.unique()
-        f["parent_station"] = f.parent_station.map(
-            lambda x: x if x in ids else np.nan
-        )
-        feed.stops = f
 
     # Drop trips with no stop times
     ids = feed.stop_times["trip_id"].unique()
@@ -118,15 +103,13 @@ def drop_zombies(feed: "Feed") -> "Feed":
     feed.trips = f[f["trip_id"].isin(ids)]
 
     # Drop shapes with no trips
-    ids = feed.trips["shape_id"].unique()
     f = feed.shapes
     if f is not None:
+        if "shape_id" in feed.trips.columns:
+            ids = feed.trips["shape_id"].unique()
+        else:
+            ids = []
         feed.shapes = f[f["shape_id"].isin(ids)]
-
-    # Drop routes with no trips
-    ids = feed.trips["route_id"].unique()
-    f = feed.routes
-    feed.routes = f[f["route_id"].isin(ids)]
 
     # Drop services with no trips
     ids = feed.trips["service_id"].unique()
@@ -136,6 +119,79 @@ def drop_zombies(feed: "Feed") -> "Feed":
     if feed.calendar_dates is not None:
         f = feed.calendar_dates
         feed.calendar_dates = f[f["service_id"].isin(ids)]
+
+    # Drop routes with no trips
+    ids = feed.trips["route_id"].unique()
+    f = feed.routes
+    feed.routes = f[f["route_id"].isin(ids)]
+
+    # Drop stops with no stop_times
+    f = feed.stops.copy()
+    ids = feed.stop_times.stop_id.unique()
+    cond = f.stop_id.isin(ids)
+    if "location_type" in f.columns:
+        cond |= ~f.location_type.isin([0, np.nan])
+    feed.stops = f[cond].copy()
+
+    return feed
+
+
+def drop_undefined(feed: "Feed") -> "Feed":
+    """
+    In the given Feed, do the following in order:
+
+    1. Drop stops with undefined parent_station.
+    2. Drop stop_times with undefined stop_id.
+    TODO: 3. If more than one agency, drop routes with undefined agency_id.
+    4. Drop trips with undefined route_id.
+    5. Drop trips with undefined service_id.
+    6. Drop trips['shape_id'] with undefined shape_id.
+    7. Drop stop_times with undefined trip_id.
+
+    Return the resulting Feed.
+    """
+    feed = feed.copy()
+
+    # Drop stops with undefined parent_station
+    if "parent_station" in feed.stops.columns:
+        f = feed.stops.copy()
+        S = set(f.stop_id) | {np.nan}
+        cond = f.stop_id.isin(S)
+        feed.stops = f[cond].copy()
+
+    # Drop stop_times with undefined stop_id
+    # TODO: remove the unique where it's not needed since they are id columns
+    ids = feed.stops["stop_id"].unique()
+    f = feed.stop_times
+    feed.stop_times = f[f["stop_id"].isin(ids)]
+
+    # Drop trips with undefined route_id
+    ids = feed.routes["route_id"].unique()
+    f = feed.trips
+    feed.trips = f[f["route_id"].isin(ids)]
+
+    # Drop trips with undefined service_id
+    ids = set()
+    if feed.calendar is not None:
+        ids.add(feed.calendar["service_id"].unique())
+    if feed.calendar_dates is not None:
+        ids.add(feed.calendar_dates["service_id"].unique())
+    f = feed.trips
+    feed.trips = f[f["service_id"].isin(ids)]
+
+    # Drop trips['shape_id'] with undefined shape_id
+    if "shape_id" in feed.trips.columns:
+        f = feed.trips.copy()
+        ids = feed.shapes["shape_id"].unique()
+        f["shape_id"] = f.shape_id.map(
+            lambda x: x if x in ids else np.nan
+        )
+        feed.trips = f
+
+    # Drop stop_times with undefined trip_id
+    ids = feed.trip_id["trip_id"].unique()
+    f = feed.stop_times
+    feed.stop_times = f[f["trip_id"].isin(ids)]
 
     return feed
 
