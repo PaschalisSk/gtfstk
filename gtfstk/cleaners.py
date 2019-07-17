@@ -171,11 +171,12 @@ def drop_undefined(feed: "Feed") -> "Feed":
     feed.trips = f[f["route_id"].isin(ids)]
 
     # Drop trips with undefined service_id
-    ids = set()
+    ids = pd.Series()
     if feed.calendar is not None:
-        ids.add(feed.calendar["service_id"].unique())
+        ids = ids.append(feed.calendar["service_id"])
     if feed.calendar_dates is not None:
-        ids.add(feed.calendar_dates["service_id"].unique())
+        ids = ids.append(feed.calendar_dates["service_id"])
+    ids = ids.unique()
     f = feed.trips
     feed.trips = f[f["service_id"].isin(ids)]
 
